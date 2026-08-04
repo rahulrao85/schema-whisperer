@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schema Whisperer — Deep MongoDB Schema Profiling for DataHub</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f172a; color: #e2e8f0;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid #475569;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header h1 span { color: #38bdf8; }
+    header p { color: #94a3b8; margin-top: 0.25rem; font-size: 0.9rem; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+    /* Status bar */
+    .status-bar {
+      display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    }
+    .status-chip {
+      padding: 0.4rem 0.8rem; border-radius: 9999px; font-size: 0.8rem;
+      background: #1e293b; border: 1px solid #334155;
+    }
+    .status-chip .dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle;
+    }
+    .dot.green { background: #22c55e; }
+    .dot.yellow { background: #eab308; }
+    .dot.gray { background: #64748b; }
+
+    /* Collections grid */
+    .section-title {
+      font-size: 1.1rem; font-weight: 600; margin: 1.5rem 0 0.75rem;
+      color: #cbd5e1;
+    }
+    .collections-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 0.75rem; margin-bottom: 1.5rem;
+    }
+    .collection-card {
+      background: #1e293b; border: 1px solid #334155; border-radius: 0.5rem;
+      padding: 1rem; cursor: pointer; transition: all 0.2s;
+    }
+    .collection-card:hover { border-color: #38bdf8; background: #1e293b; }
+    .collection-card .name { font-weight: 600; font-size: 1rem; }
+    .collection-card .count { color: #64748b; font-size: 0.85rem; margin-top: 0.25rem; }
+
+    /* Profile button */
+    .actions { display: flex; gap: 0.75rem; margin-bottom: 1.5rem; }
+    button {
+      padding: 0.6rem 1.2rem; border-radius: 0.375rem; border: none;
+      font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-primary { background: #0ea5e9; color: white; }
+    .btn-primary:hover { background: #0284c7; }
+    .btn-primary:disabled { background: #475569; cursor: not-allowed; }
+    .btn-secondary { background: #334155; color: #e2e8f0; }
+    .btn-secondary:hover { background: #475569; }
+
+    /* Loading */
+    .loading {
+      text-align: center; padding: 2rem; color: #94a3b8;
+    }
+    .spinner {
+      display: inline-block; width: 24px; height: 24px;
+      border: 3px solid #334155; border-top-color: #38bdf8;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+      margin-bottom: 0.5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Profile result */
+    .profile-result {
+      background: #1e293b; border: 1px solid #334155; border-radius: 0.5rem;
+      padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .profile-result h3 { color: #38bdf8; margin-bottom: 0.75rem; }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem; margin-bottom: 1.25rem;
+    }
+    .stat-card {
+      background: #0f172a; border-radius: 0.375rem; padding: 0.75rem;
+      text-align: center;
+    }
+    .stat-card .value { font-size: 1.5rem; font-weight: 700; }
+    .stat-card .value.blue { color: #38bdf8; }
+    .stat-card .value.amber { color: #f59e0b; }
+    .stat-card .value.red { color: #ef4444; }
+    .stat-card .value.green { color: #22c55e; }
+    .stat-card .label { font-size: 0.75rem; color: #64748b; margin-top: 0.2rem; }
+
+    /* Description */
+    .description-box {
+      background: #0f172a; border-radius: 0.375rem; padding: 1rem;
+      margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.5;
+      border-left: 3px solid #38bdf8;
+    }
+
+    /* Tags */
+    .tags { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .tag {
+      padding: 0.2rem 0.6rem; border-radius: 0.25rem; font-size: 0.75rem;
+      background: #1e293b; border: 1px solid #334155;
+    }
+    .tag.pii { border-color: #ef4444; color: #fca5a5; }
+    .tag.health { border-color: #f59e0b; color: #fde68a; }
+
+    /* Fields table */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; padding: 0.5rem; color: #94a3b8; border-bottom: 1px solid #334155; }
+    td { padding: 0.5rem; border-bottom: 1px solid #1e293b; }
+    tr:hover { background: #0f172a; }
+    .flag {
+      display: inline-block; padding: 0.1rem 0.4rem; border-radius: 0.2rem;
+      font-size: 0.7rem; margin-left: 0.3rem;
+    }
+    .flag.rare { background: #7c3aed33; color: #c4b5fd; }
+    .flag.conflict { background: #ef444433; color: #fca5a5; }
+    .flag.nullable { background: #64748b33; color: #94a3b8; }
+
+    /* Variants */
+    .variant-bar {
+      display: flex; height: 24px; border-radius: 0.25rem; overflow: hidden;
+      margin-bottom: 0.25rem;
+    }
+    .variant-segment {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 600; color: white;
+    }
+
+    /* DataHub section */
+    .datahub-status {
+      padding: 0.75rem; border-radius: 0.375rem; margin-top: 1rem;
+      font-size: 0.85rem;
+    }
+    .datahub-status.success { background: #22c55e22; border: 1px solid #22c55e44; }
+    .datahub-status.info { background: #38bdf822; border: 1px solid #38bdf844; }
+    .datahub-status.warning { background: #f59e0b22; border: 1px solid #f59e0b44; }
+
+    footer {
+      text-align: center; padding: 2rem; color: #475569; font-size: 0.8rem;
+      border-top: 1px solid #1e293b; margin-top: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Schema <span>Whisperer</span></h1>
+    <p>Deep MongoDB schema profiling for DataHub — finds what the 1000-doc sample misses</p>
+  </header>
+
+  <div class="container">
+    <div class="status-bar" id="statusBar">
+      <div class="status-chip"><span class="dot gray" id="mongoDot"></span> MongoDB: <span id="mongoStatus">connecting</span></div>
+      <div class="status-chip"><span class="dot gray" id="datahubDot"></span> DataHub: <span id="datahubStatus">checking</span></div>
+      <div class="status-chip"><span class="dot gray" id="llmDot"></span> LLM: <span id="llmStatus">checking</span></div>
+    </div>
+
+    <div id="collectionsSection">
+      <div class="section-title">Collections</div>
+      <div class="collections-grid" id="collectionsGrid">
+        <div class="loading"><div class="spinner"></div><br>Loading collections...</div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn-primary" onclick="profileAll()">Profile All Collections</button>
+      <button class="btn-secondary" onclick="analyzeAll()">Profile + Write-Back to DataHub</button>
+    </div>
+
+    <div id="resultsArea"></div>
+  </div>
+
+  <footer>
+    Schema Whisperer — Built for <a href="https://datahub.devpost.com/" style="color:#38bdf8">DataHub Agent Hackathon 2026</a> &middot; Apache 2.0
+  </footer>
+
+  <script>
+    const API = '';
+
+    // --- Health check ---
+    async function checkHealth() {
+      try {
+        const resp = await fetch(`${API}/api/health`);
+        const data = await resp.json();
+        setDot('mongoDot', 'mongoStatus', data.mongo, data.mongo === 'connected');
+        setDot('datahubDot', 'datahubStatus', data.datahub, data.datahub === 'connected');
+        setDot('llmDot', 'llmStatus', data.llm, data.llm === 'enabled');
+      } catch {
+        setDot('mongoDot', 'mongoStatus', 'error', false);
+      }
+    }
+
+    function setDot(dotId, statusId, label, ok) {
+      document.getElementById(dotId).className = 'dot ' + (ok ? 'green' : (label === 'error' ? 'gray' : 'yellow'));
+      document.getElementById(statusId).textContent = label;
+    }
+
+    // --- Load collections ---
+    async function loadCollections() {
+      try {
+        const resp = await fetch(`${API}/api/collections`);
+        const data = await resp.json();
+        const grid = document.getElementById('collectionsGrid');
+        if (!data.collections.length) {
+          grid.innerHTML = '<div class="loading">No collections found. Run <code>npm run seed</code> first.</div>';
+          return;
+        }
+        grid.innerHTML = data.collections.map(c =>
+          `<div class="collection-card" onclick="profileOne('${c.name}')">
+            <div class="name">${c.name}</div>
+            <div class="count">${c.count.toLocaleString()} docs</div>
+          </div>`
+        ).join('');
+      } catch (e) {
+        document.getElementById('collectionsGrid').innerHTML =
+          `<div class="loading" style="color:#fca5a5">Failed to load: ${e.message}</div>`;
+      }
+    }
+
+    // --- Profile one ---
+    async function profileOne(name) {
+      const area = document.getElementById('resultsArea');
+      area.innerHTML = `<div class="loading"><div class="spinner"></div><br>Profiling <strong>${name}</strong> (deep scan)...</div>`;
+
+      try {
+        const resp = await fetch(`${API}/api/profile/${name}`, { method: 'POST' });
+        const data = await resp.json();
+        renderProfile(data, area);
+      } catch (e) {
+        area.innerHTML = `<div class="datahub-status warning">Profile failed: ${e.message}</div>`;
+      }
+    }
+
+    // --- Profile all ---
+    async function profileAll() {
+      const area = document.getElementById('resultsArea');
+      area.innerHTML = `<div class="loading"><div class="spinner"></div><br>Profiling all collections...</div>`;
+      try {
+        const collsResp = await fetch(`${API}/api/collections`);
+        const colls = (await collsResp.json()).collections;
+        let html = '';
+        for (const c of colls) {
+          html += `<div class="loading" id="loading-${c.name}"><div class="spinner"></div> ${c.name}...</div>`;
+        }
+        area.innerHTML = html;
+        for (const c of colls) {
+          const resp = await fetch(`${API}/api/profile/${c.name}`, { method: 'POST' });
+          const data = await resp.json();
+          const el = document.getElementById(`loading-${c.name}`);
+          if (el) el.outerHTML = '';
+          renderProfile(data, area, true);
+        }
+      } catch (e) {
+        area.innerHTML += `<div class="datahub-status warning">Error: ${e.message}</div>`;
+      }
+    }
+
+    // --- Analyze all + write-back ---
+    async function analyzeAll() {
+      const area = document.getElementById('resultsArea');
+      area.innerHTML = `<div class="loading"><div class="spinner"></div><br>Profiling all + writing back to DataHub...</div>`;
+      try {
+        const resp = await fetch(`${API}/api/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ writeToDataHub: true }),
+        });
+        const data = await resp.json();
+        area.innerHTML = '';
+        for (const r of data.results) {
+          renderProfile(r, area, true);
+        }
+      } catch (e) {
+        area.innerHTML = `<div class="datahub-status warning">Error: ${e.message}</div>`;
+      }
+    }
+
+    // --- Render a profile result ---
+    function renderProfile(data, container, prepend = false) {
+      const p = data.profile;
+      const COLORS = ['#0ea5e9', '#8b5cf6', '#f59e0b', '#22c55e', '#ef4444', '#ec4899', '#6366f1'];
+      const html = `
+        <div class="profile-result">
+          <h3>📁 ${p.collection}</h3>
+          <div class="stats-grid">
+            <div class="stat-card"><div class="value blue">${p.totalDocs.toLocaleString()}</div><div class="label">Total Docs</div></div>
+            <div class="stat-card"><div class="value blue">${p.fieldCount}</div><div class="label">Fields Found</div></div>
+            <div class="stat-card"><div class="value ${p.variants.length > 1 ? 'amber' : 'green'}">${p.variants.length}</div><div class="label">Schema Variants</div></div>
+            <div class="stat-card"><div class="value ${p.rareFields.length > 0 ? 'amber' : 'green'}">${p.rareFields.length}</div><div class="label">Rare Fields</div></div>
+            <div class="stat-card"><div class="value ${p.conflictedFields.length > 0 ? 'red' : 'green'}">${p.conflictedFields.length}</div><div class="label">Type Conflicts</div></div>
+          </div>
+
+          <div class="description-box">${data.description}</div>
+
+          ${data.tags.length ? `
+            <div class="section-title" style="margin-top:1rem;font-size:0.85rem;">Detected Tags</div>
+            <div class="tags">
+              ${data.tags.map(t => `<span class="tag ${t.startsWith('pii') ? 'pii' : 'health'}">${t}</span>`).join('')}
+            </div>
+          ` : ''}
+
+          ${p.variants.length > 1 ? `
+            <div class="section-title" style="margin-top:1rem;font-size:0.85rem;">Schema Evolution</div>
+            <div class="variant-bar">
+              ${p.variants.map((v, i) =>
+                `<div class="variant-segment" style="width:${Math.round(v.pctOfCollection*100)}%;background:${COLORS[i % COLORS.length]}">${v.variant}: ${Math.round(v.pctOfCollection*100)}%</div>`
+              ).join('')}
+            </div>
+          ` : ''}
+
+          <div class="section-title" style="margin-top:1rem;font-size:0.85rem;">Fields (${p.fields.length})</div>
+          <table>
+            <tr><th>Field</th><th>Type</th><th>Presence</th><th>Flags</th></tr>
+            ${p.fields.map(f => `
+              <tr>
+                <td><code>${f.name}</code></td>
+                <td>${f.dominantType}${f.types.length > 1 ? ` <span style="color:#fca5a5;font-size:0.75rem">+${f.types.length-1} types</span>` : ''}</td>
+                <td>${Math.round(f.frequency*100)}%</td>
+                <td>
+                  ${f.isRare ? '<span class="flag rare">rare</span>' : ''}
+                  ${f.hasTypeConflict ? '<span class="flag conflict">conflict</span>' : ''}
+                  ${f.nullable ? '<span class="flag nullable">nullable</span>' : ''}
+                </td>
+              </tr>
+            `).join('')}
+          </table>
+
+          ${data.dataHubNote ? `<div class="datahub-status info">${data.dataHubNote}</div>` : ''}
+          ${data.writtenToDataHub ? `<div class="datahub-status success">✅ Written to DataHub: enriched description + ${data.tags.length} tags + report</div>` : ''}
+        </div>
+      `;
+      if (prepend) {
+        container.insertAdjacentHTML('afterbegin', html);
+      } else {
+        container.innerHTML = html;
+      }
+    }
+
+    // --- Init ---
+    checkHealth();
+    loadCollections();
+  </script>
+</body>
+</html>

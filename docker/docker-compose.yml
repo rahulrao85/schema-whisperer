@@ -1,0 +1,148 @@
+# Schema Whisperer — Local Development Stack
+# =============================================
+# Spins up DataHub (quickstart) + MongoDB side by side.
+#
+# USAGE:
+#   npm run docker:up      # start both
+#   npm run docker:down    # tear down
+#   npm run docker:logs    # follow logs
+#
+# DataHub quickstart includes: Elasticsearch, Kafka, Zookeeper, MySQL, GMS, Frontend
+# This is a heavy stack (~4GB RAM). Make sure you have Docker Desktop running.
+
+services:
+  # ------------------------------------------------------------------
+  # MongoDB — our profiling target
+  # ------------------------------------------------------------------
+  mongodb:
+    image: mongo:7
+    container_name: whisper-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    restart: unless-stopped
+
+  # ------------------------------------------------------------------
+  # DataHub Quickstart — the metadata platform
+  # This is the standard datahub docker quickstart (official).
+  # After startup, visit http://localhost:9002 for the DataHub UI.
+  # GMS API (GraphQL) is at http://localhost:8080/api/graphql
+  # MCP endpoint is at http://localhost:8080/mcp
+  # ------------------------------------------------------------------
+  datahub-gms:
+    image: acryldata/datahub-gms:head
+    container_name: whisper-datahub-gms
+    depends_on:
+      - datahub-elasticsearch
+      - datahub-mysql
+    ports:
+      - "8080:8080"
+    environment:
+      # Default DataHub quickstart config
+      DATAHUB_GMS_HOST: localhost
+      DATAHUB_GMS_PORT: 8080
+      ELASTICSEARCH_HOST: datahub-elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      EBEAN_DATASOURCE_HOST: datahub-mysql:3306
+      EBEAN_DATASOURCE_USERNAME: datahub
+      EBEAN_DATASOURCE_PASSWORD: datahub
+      EBEAN_DATASOURCE_URL: jdbc:mysql://datahub-mysql:3306/datahub?verifyServerCertificate=false&useSSL=false&allowPublicKeyRetrieval=true
+      KAFKA_BOOTSTRAP_SERVER: datahub-kafka:9092
+      KAFKA_SCHEMAREGISTRY_URL: http://datahub-kafka-schema-registry:8081
+      GRAPH_SERVICE_IMPL: elasticsearch
+      SKIP_NEO4J_CHECK: "true"
+      ENTITY_REGISTRY_CONFIG_PATH: /datahub/datahub-gms/resources/entity-registry.yml
+      DATAHUB_TOKEN_SERVICE_SIGNING_KEY: JAgkhTGa7vJTSo7SNFB49ld82GCBYkDg5wSpSSb909lZ+6CyoEG3U+VlWxnbdBjk
+      DATAHUB_TOKEN_SERVICE_SALT: 3D0luGi45arFzinebYjzwKaGmexDhsIPGV6r4+p6iQ1/HCbTeDzafIypVC3k4p/A
+      DATAHUB_SEARCH_ENABLED: "true"
+      DATAHUB_AUDIT_ENABLED: "true"
+      MAE_CONSUMER_ENABLED: "true"
+      DATAHUB_MAE_CONSUMPTION_ENABLED: "true"
+      BOOTSTRAP_SYSTEM_UPDATE_WAIT_FOR_SYSTEM_UPDATE: "false"
+    restart: unless-stopped
+
+  datahub-frontend:
+    image: acryldata/datahub-frontend-react:head
+    container_name: whisper-datahub-frontend
+    depends_on:
+      - datahub-gms
+    ports:
+      - "9002:9002"
+    environment:
+      DATAHUB_GMS_HOST: datahub-gms
+      DATAHUB_GMS_PORT: 8080
+      DATAHUB_SECRET: "JAgkhTGa7vJTSo7SNFB49ld82GCBYkDg5wSpSSb909lZ+6CyoEG3U+VlWxnbdBjk3D0luGi45arFzinebYjzwKaGmexDhsIPGV6r4+p6iQ1/HCbTeDzafIypVC3k4p/A"
+      DATAHUB_APP_VERSION: "2.0"
+      DATAHUB_PLAY_BACKEND: "gms"
+    restart: unless-stopped
+
+  datahub-elasticsearch:
+    image: elasticsearch:7.10.1
+    container_name: whisper-datahub-es
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    restart: unless-stopped
+
+  datahub-mysql:
+    image: mysql:8.0
+    container_name: whisper-datahub-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: datahub
+      MYSQL_DATABASE: datahub
+      MYSQL_USER: datahub
+      MYSQL_PASSWORD: datahub
+    volumes:
+      - mysql-data:/var/lib/mysql
+    restart: unless-stopped
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:5.5.4
+    container_name: whisper-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    restart: unless-stopped
+
+  datahub-kafka:
+    image: confluentinc/cp-kafka:5.5.4
+    container_name: whisper-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://datahub-kafka:9092
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    restart: unless-stopped
+
+  datahub-kafka-schema-registry:
+    image: confluentinc/cp-schema-registry:5.5.4
+    container_name: whisper-schema-registry
+    depends_on:
+      - zookeeper
+      - datahub-kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_KAFKASTORE_CONNECTION_URL: zookeeper:2181
+      SCHEMA_REGISTRY_HOST_NAME: localhost
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  es-data:
+  mysql-data:
