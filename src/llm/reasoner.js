@@ -60,7 +60,10 @@ class Reasoner {
         },
         { headers: { Authorization: `Bearer ${this.apiKey}` }, timeout: 20000 }
       );
-      return resp.data.choices[0].message.content?.trim() || resp.data.choices[0].message.reasoning?.trim() || this.fallbackDescription(profile);
+      const content = resp.data.choices[0]?.message?.content?.trim();
+      if (content) return content;
+      console.error('  [reasoner] LLM returned empty content, using fallback');
+      return this.fallbackDescription(profile);
     } catch (err) {
       console.error(`  [reasoner] LLM call failed, using fallback: ${err.message}`);
       return this.fallbackDescription(profile);

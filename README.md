@@ -70,7 +70,23 @@ curl -X POST http://localhost:3400/api/profile/orders | jq
 curl -X POST http://localhost:3400/api/analyze \
   -H "Content-Type: application/json" \
   -d '{"writeToDataHub": true}'
+
+# Demo: one command — profile all collections + write back to DataHub
+node scripts/one-shot.js
+
+# Demo: reset DataHub to clean "before" state (empty description, no tags)
+node scripts/reset-demo.js
 ```
+
+## Demo Flow
+
+```
+1. node scripts/reset-demo.js    # clean "before" state in DataHub
+2. node scripts/one-shot.js      # deep profile + write description & tags back
+3. Refresh DataHub UI            # dataset now has description + PII/quality tags
+```
+
+See [DEMO_SCRIPT.md](DEMO_SCRIPT.md) for the full recording guide.
 
 ## Architecture
 

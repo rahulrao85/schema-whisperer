@@ -87,22 +87,20 @@ class Whisperer {
     // 2. WRITE BACK to DataHub if configured + enabled
     if (writeToDataHub && this.datahub) {
       try {
-        // Find the matching dataset URN in DataHub
-        const datasets = await this.datahub.searchDatasets(profile.collection);
-        const match = datasets.find(
-          (d) => d.name && d.name.toLowerCase().includes(profile.collection.toLowerCase())
-        );
-
-        if (!match) {
+        // Try search first, then fall back to a directly-constructed URN.
+        // Search can fail if the DataHub search index is unhealthy — the
+        // URN is deterministic, so we can always write without searching.
+        const urn = await this.resolveUrn(profile.collection);
+        if (!urn) {
           console.log(`  [datahub] No matching dataset for "${profile.collection}" — skipping write-back`);
           result.dataHubNote = 'No matching dataset found in DataHub (run the MongoDB ingestion first)';
           return result;
         }
 
-        console.log(`  [datahub] Writing back to ${match.urn}`);
-        await this.datahub.updateDescription(match.urn, description);
-        if (tags.length) await this.datahub.addTags(match.urn, tags);
-        await this.datahub.saveDocument(match.urn, `Deep Profile — ${profile.collection}`, report);
+        console.log(`  [datahub] Writing back to ${urn}`);
+        await this.datahub.updateDescription(urn, description);
+        if (tags.length) await this.datahub.addTags(urn, tags);
+        await this.datahub.saveDocument(urn, `Deep Profile — ${profile.collection}`, report);
         result.writtenToDataHub = true;
         console.log(`  [datahub] ✅ Updated description + ${tags.length} tags + report`);
       } catch (err) {
@@ -112,6 +110,41 @@ class Whisperer {
     }
 
     return result;
+  }
+
+  /**
+   * Resolve the DataHub URN for a collection. Tries search, then falls back
+   * to a directly-constructed URN (the format is deterministic for the
+   * MongoDB ingestion source).
+   */
+  async resolveUrn(collection) {
+    // 1. Try search
+    try {
+      const datasets = await this.datahub.searchDatasets(collection);
+      const match = datasets.find(
+        (d) => d.name && d.name.toLowerCase().includes(collection.toLowerCase())
+      );
+      if (match) return match.urn;
+    } catch (e) {
+      console.log(`  [datahub] Search failed (${e.message.split('Root cause:')[0].trim()}) — trying direct URN`);
+    }
+
+    // 2. Fall back to direct URN construction.
+    // DataHub MongoDB ingestion URN format:
+    //   urn:li:dataset:(urn:li:dataPlatform:mongodb,<host>.<db>.<collection>,PROD)
+    // The host here is DataHub's platform instance name, which we must
+    // resolve from the Mongo URI WITHOUT credentials. Support the Atlas
+    // format (cluster0.o681k9z.mongodb.net -> atlas-cluster0) and a raw
+    // configured value (MONGO_DATAHUB_HOST) as an escape hatch.
+    const uri = this.config.mongoUri;
+    let host = this.config.mongoDatahubHost || null;
+    if (!host && uri) {
+      const clean = uri.replace(/^mongodb(\+srv)?:\/\/[^@]+@/, ''); // strip user:pass@
+      const m = clean.match(/^([^.]+)/); // first label of the host
+      if (m) host = `atlas-${m[1]}`;
+    }
+    host = host || 'localhost';
+    return `urn:li:dataset:(urn:li:dataPlatform:mongodb,${host}.${this.config.mongoDb}.${collection},PROD)`;
   }
 
   /**
