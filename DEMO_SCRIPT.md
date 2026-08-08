@@ -42,28 +42,50 @@ SAY:
    This is a real problem for data teams."
 
 ================================================================================
-SCENE 2 — Run the Agent (0:40 - 1:40)
+SCENE 2 — Show the Field-Level Intelligence (0:40 - 1:40)
 ================================================================================
 
-OPEN TERMINAL (in F:\AGENTIC WORLD\datahub-schema-whisperer)
+SWITCH TO TERMINAL (in F:\AGENTIC WORLD\datahub-schema-whisperer)
 
 COMMAND:
+  node scripts/profile-cli.js users
+
+WATCH OUTPUT (the strong part of the demo):
+  - Collection: users | Total docs: 5000
+  - Fields found: 9
+  - Schema variants: 4            <- DataHub's 1000-doc sample missed these
+  - Rare fields: 1 (legacyUuid)
+  - Type conflicts: 1 (createdAt is BOTH Date AND string)
+  - LLM-generated description
+  - Tags: pii-email, pii-phone, pii-name, type-conflict, ...
+
+SAY:
+  "DataHub's ingestion only samples 1,000 documents.
+   Schema Whisperer scans ALL 5,000 documents and finds what
+   the shallow sample missed — a type conflict on createdAt,
+   four schema variants, and a rare legacyUuid field.
+   It even flags that this collection holds personal data."
+
+NOTE: MongoDB URI is redacted (***:***@) — no secrets on screen.
+
+================================================================================
+SCENE 3 — Run the Write-Back (1:40 - 2:10)
+================================================================================
+
+SAME TERMINAL — next command:
+
   node scripts/one-shot.js
 
 WATCH OUTPUT:
   - Profiles all 3 collections (events, orders, users)
-  - users: 6 tags (pii-email, pii-phone, pii-name, type-conflict,
-           schema-evolving, multi-schema)
   - "Write-back: ✅ SUCCESS" for all 3
 
 SAY:
-  "Now let's run Schema Whisperer.
-   It scans every document, reasons about what it finds with an LLM,
-   and writes the result back to DataHub — a description plus
+  "Now it writes the result back to DataHub — a description plus
    governance tags that flag PII and quality issues."
 
 ================================================================================
-SCENE 3 — Show the Result (1:40 - 2:40)
+SCENE 4 — Show the Result (2:10 - 3:00)
 ================================================================================
 
 REFRESH the users dataset page in DataHub
@@ -81,7 +103,7 @@ SAY:
    The read-reason-writeback loop works end to end."
 
 ================================================================================
-SCENE 4 — Close (2:40 - 3:00)
+SCENE 5 — Close (3:00 - 3:20)
 ================================================================================
 
 SAY:

@@ -26,7 +26,7 @@ async function main() {
   const dbName = process.env.MONGO_DB || 'whisper_demo';
 
   console.log(`\n🔍 Schema Whisperer CLI`);
-  console.log(`   MongoDB: ${uri}/${dbName}\n`);
+  console.log(`   MongoDB: ${uri.replace(/\/\/[^@]+@/, '//***:***@')}/${dbName}\n`);
 
   const client = new MongoClient(uri);
   await client.connect();
