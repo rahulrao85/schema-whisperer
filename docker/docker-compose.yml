@@ -53,7 +53,7 @@ services:
       GRAPH_SERVICE_IMPL: elasticsearch
       SKIP_NEO4J_CHECK: "true"
       ENTITY_REGISTRY_CONFIG_PATH: /datahub/datahub-gms/resources/entity-registry.yml
-      DATAHUB_TOKEN_SERVICE_SIGNING_KEY: JAgkhTGa7vJTSo7SNFB49ld82GCBYkDg5wSpSSb909lZ+6CyoEG3U+VlWxnbdBjk
+      DATAHUB_TOKEN_SERVICE_SIGNING_KEY: "${DATAHUB_TOKEN_SERVICE_SIGNING_KEY:?Set DATAHUB_TOKEN_SERVICE_SIGNING_KEY in .env}"
       DATAHUB_TOKEN_SERVICE_SALT: 3D0luGi45arFzinebYjzwKaGmexDhsIPGV6r4+p6iQ1/HCbTeDzafIypVC3k4p/A
       DATAHUB_SEARCH_ENABLED: "true"
       DATAHUB_AUDIT_ENABLED: "true"
@@ -72,7 +72,7 @@ services:
     environment:
       DATAHUB_GMS_HOST: datahub-gms
       DATAHUB_GMS_PORT: 8080
-      DATAHUB_SECRET: "JAgkhTGa7vJTSo7SNFB49ld82GCBYkDg5wSpSSb909lZ+6CyoEG3U+VlWxnbdBjk3D0luGi45arFzinebYjzwKaGmexDhsIPGV6r4+p6iQ1/HCbTeDzafIypVC3k4p/A"
+      DATAHUB_SECRET: "${DATAHUB_SECRET:?Set DATAHUB_SECRET in .env (e.g. openssl rand -base64 48)}"
       DATAHUB_APP_VERSION: "2.0"
       DATAHUB_PLAY_BACKEND: "gms"
     restart: unless-stopped
